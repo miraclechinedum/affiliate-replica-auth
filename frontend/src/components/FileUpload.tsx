@@ -1,0 +1,2 @@
+import React, { useState } from 'react'
+export default function FileUpload({onChange}:{onChange:(f:File|null)=>void}){ const [p,setP]=useState<string|null>(null); const handle=(e:any)=>{ const f=e.target.files?.[0]||null; if(!f){setP(null);onChange(null);return} setP(URL.createObjectURL(f)); onChange(f)}; return (<div><input type='file' accept='image/*,application/pdf' onChange={handle} />{p && <img src={p} alt='preview' className='mt-2 max-h-40'/>}</div>)}

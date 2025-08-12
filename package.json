@@ -1,0 +1,12 @@
+{
+  "name": "affiliate-replica-auth",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm:dev --prefix frontend\" \"npm:dev --prefix backend\"",
+    "install-all": "npm install --prefix frontend && npm install --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
