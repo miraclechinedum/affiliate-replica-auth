@@ -9,9 +9,62 @@
     },
     "crypto": {
       "btc": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
-      "eth": "0x0000000000000000000000000000000000000000",
-      "usdt": "TETHER-DEMO-ADDRESS"
+      "eth": "0x022333",
+      "usdt": "44543222"
     }
   },
-  "submissions": []
+  "submissions": [
+    {
+      "id": "Nz6mvJ2g",
+      "name": "Naija LearnCrypto",
+      "email": "miraclechinedum16@gmail.com",
+      "method": "crypto",
+      "selectedNetwork": "BTC",
+      "amount": "230",
+      "txid": null,
+      "idFileUrl": "/mock-storage/1755102983664-Landmine Estate - Real Estate vs Stocks .png",
+      "paymentProofUrl": "/mock-storage/1755102983706-Landmine Estate - Monday Motivation.png",
+      "status": "pending",
+      "createdAt": "2025-08-13T16:36:23.729Z"
+    },
+    {
+      "id": "dorMbl0S",
+      "name": "Daniel Ugochukwu",
+      "email": "danielugo@gmail.com",
+      "method": "crypto",
+      "selectedNetwork": "BTC",
+      "amount": "540",
+      "txid": null,
+      "idFileUrl": "/mock-storage/1755100026496-photo_2025-07-02_07-42-11.jpg",
+      "paymentProofUrl": "/mock-storage/1755100026519-SpongeBob .png",
+      "status": "pending",
+      "createdAt": "2025-08-13T15:47:06.567Z"
+    },
+    {
+      "id": "fxOmd25r",
+      "name": "Miracle Chinedum",
+      "email": "miraclechinedum16@gmail.com",
+      "method": "crypto",
+      "selectedNetwork": "BTC",
+      "amount": "377",
+      "txid": null,
+      "idFileUrl": null,
+      "paymentProofUrl": "/mock-storage/1755082790216-Squidward .png",
+      "status": "pending",
+      "createdAt": "2025-08-13T10:59:50.266Z"
+    },
+    {
+      "id": "KJnL35gu",
+      "name": "Miracle Chinedum",
+      "email": "miraclechinedum16@gmail.com",
+      "method": "crypto",
+      "selectedNetwork": "USDT",
+      "amount": "200",
+      "txid": null,
+      "idFileUrl": "/mock-storage/1755082775014-photo_2025-07-02_07-42-11.jpg",
+      "paymentProofUrl": null,
+      "status": "pending",
+      "createdAt": "2025-08-13T10:59:35.054Z"
+    }
+  ]
 }

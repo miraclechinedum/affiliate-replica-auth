@@ -1,6 +1,6 @@
 // frontend/src/views/Program.tsx
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import api from "../utils/api";
@@ -23,6 +23,9 @@ type AccountDetails = {
 };
 
 export default function Program() {
+  const [pageLoading, setPageLoading] = useState(true);
+  const [loaderText, setLoaderText] = useState("Encrypting...");
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -32,8 +35,9 @@ export default function Program() {
   const [txid, setTxid] = useState("");
   const [status, setStatus] = useState("");
   const [expired, setExpired] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [timeLeft, setTimeLeft] = useState(14 * 60 + 49); // 14:49 default
+  const [timeLeft, setTimeLeft] = useState(14 * 60 + 49);
   const [accountDetails, setAccountDetails] = useState<AccountDetails | null>(
     null
   );
@@ -42,9 +46,26 @@ export default function Program() {
   );
   const [showWireModal, setShowWireModal] = useState(false);
 
+  // Refs for clearing file inputs
+  const idFileRef = useRef<HTMLInputElement | null>(null);
+  const paymentProofRef = useRef<HTMLInputElement | null>(null);
+
   const navigate = useNavigate();
 
-  // fetch account details (public)
+  // Page loader effect
+  useEffect(() => {
+    const t1 = setTimeout(
+      () => setLoaderText("Proceeding to secure payment..."),
+      3000
+    );
+    const t2 = setTimeout(() => setPageLoading(false), 6000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
+
+  // Fetch account details
   useEffect(() => {
     api
       .get("/account-details")
@@ -52,15 +73,7 @@ export default function Program() {
       .catch(() => setAccountDetails(null));
   }, []);
 
-  // update deposit address when selectedCrypto or accountDetails changes
-  const depositAddress = React.useMemo(() => {
-    if (!accountDetails?.crypto) return "";
-    if (selectedCrypto === "BTC") return accountDetails.crypto?.btc || "";
-    if (selectedCrypto === "ETH") return accountDetails.crypto?.eth || "";
-    return accountDetails.crypto?.usdt || "";
-  }, [accountDetails, selectedCrypto]);
-
-  // Countdown Timer
+  // Countdown timer
   useEffect(() => {
     if (expired) return;
     if (timeLeft <= 0) {
@@ -77,7 +90,13 @@ export default function Program() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // copy address to clipboard
+  const depositAddress = React.useMemo(() => {
+    if (!accountDetails?.crypto) return "";
+    if (selectedCrypto === "BTC") return accountDetails.crypto?.btc || "";
+    if (selectedCrypto === "ETH") return accountDetails.crypto?.eth || "";
+    return accountDetails.crypto?.usdt || "";
+  }, [accountDetails, selectedCrypto]);
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -88,15 +107,12 @@ export default function Program() {
     }
   };
 
-  // submit handler
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (expired) {
       setStatus("Session expired");
       return;
     }
-
-    // Basic validation
     if (!name || !email || !amount) {
       setStatus("Please complete required fields");
       return;
@@ -113,30 +129,39 @@ export default function Program() {
     fd.append("amount", amount);
     fd.append("txid", txid);
     fd.append("selectedNetwork", selectedCrypto);
-    // id proof file field name -> idFile
     if (idFile) fd.append("idFile", idFile);
-    // payment proof file field name -> paymentProof
     if (paymentProof) fd.append("paymentProof", paymentProof);
 
     try {
-      const res = await api.post("/submissions", fd, {
+      setLoading(true);
+      await api.post("/submissions", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setStatus("Submitted: " + res.data.id);
-      // clear sensitive fields
+      setStatus("✅ Payment submitted successfully!");
+      // Reset form to defaults
+      setName("");
+      setEmail("");
       setIdFile(null);
       setPaymentProof(null);
       setTxid("");
       setAmount("");
+      setSelectedCrypto("USDT");
+      setMethod("crypto");
+      setTimeout(() => setStatus(""), 3000);
+
+      // Clear the file inputs visually
+      if (idFileRef.current) idFileRef.current.value = "";
+      if (paymentProofRef.current) paymentProofRef.current.value = "";
     } catch (err: any) {
       setStatus(
         "Submission failed: " + (err?.response?.data?.message || err.message)
       );
+    } finally {
+      setLoading(false);
     }
   };
 
   const restartProcess = () => {
-    // reset state and navigate to program (start over)
     setTimeLeft(14 * 60 + 49);
     setExpired(false);
     setIdFile(null);
@@ -144,10 +169,8 @@ export default function Program() {
     setName("");
     setEmail("");
     navigate("/program");
-    // don't reload; fresh state is fine
   };
 
-  // bank details modal content for Request Details
   const renderBankDetails = () => {
     const b = accountDetails?.bank;
     if (!b)
@@ -175,12 +198,20 @@ export default function Program() {
     );
   };
 
-  // UI
+  // Display loader overlay on page load
+  if (pageLoading) {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white z-50">
+        <div className="loader mb-4 animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-12 h-12"></div>
+        <p className="text-lg">{loaderText}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
 
-      {/* Sticky countdown - changes color at <= 5mins */}
       <div
         className={`sticky top-0 z-50 p-3 text-white text-center font-semibold ${
           timeLeft <= 300 ? "bg-red-600" : "bg-blue-600"
@@ -197,11 +228,10 @@ export default function Program() {
             alt="Logo"
             className="w-56 mx-auto"
           />
-
           <h2 className="text-2xl font-bold text-center">Deposit Funds</h2>
 
           <form onSubmit={submit} className="space-y-4">
-            {/* Basic fields */}
+            {/* Full Name */}
             <div>
               <label className="block text-sm font-medium">Full Name</label>
               <input
@@ -213,6 +243,7 @@ export default function Program() {
               />
             </div>
 
+            {/* Email */}
             <div>
               <label className="block text-sm font-medium">Email Address</label>
               <input
@@ -224,7 +255,8 @@ export default function Program() {
               />
             </div>
 
-            <div>
+            {/* Upload Proof of ID */}
+            {/* <div>
               <label className="block text-sm font-medium">
                 Upload Proof of ID
               </label>
@@ -234,9 +266,21 @@ export default function Program() {
                 onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
                 className="w-full"
               />
+            </div> */}
+
+            <div>
+              <label className="block mb-1">Proof of ID</label>
+              <input
+                ref={idFileRef}
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
+                className="w-full"
+                required
+              />
             </div>
 
-            {/* Payment method tabs */}
+            {/* Payment Method Tabs */}
             <div>
               <label className="block text-sm font-medium mb-2">
                 Payment Method
@@ -298,7 +342,7 @@ export default function Program() {
                   />
                 </div>
 
-                {/* payment proof upload field */}
+                {/* Upload Payment Proof */}
                 <div>
                   <label className="block text-sm font-medium">
                     Upload Payment Proof
@@ -316,9 +360,14 @@ export default function Program() {
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded"
+                    disabled={loading}
+                    className={`flex-1 px-4 py-2 rounded text-white ${
+                      loading
+                        ? "bg-green-600 animate-pulse opacity-70 cursor-not-allowed"
+                        : "bg-green-600"
+                    }`}
                   >
-                    Submit Wire Payment
+                    {loading ? "Submitting..." : "Submit Wire Payment"}
                   </button>
                 </div>
               </div>
@@ -363,7 +412,6 @@ export default function Program() {
                       onClick={() => copyToClipboard(depositAddress)}
                       className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-600 hover:text-gray-900"
                     >
-                      {/* simple copy icon */}
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="w-5 h-5"
@@ -401,7 +449,7 @@ export default function Program() {
                   />
                 </div>
 
-                {/* payment proof upload */}
+                {/* Upload Payment Proof */}
                 <div>
                   <label className="block text-sm font-medium">
                     Upload Payment Proof
@@ -419,9 +467,14 @@ export default function Program() {
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded"
+                    disabled={loading}
+                    className={`flex-1 px-4 py-2 rounded text-white ${
+                      loading
+                        ? "bg-green-600 animate-pulse opacity-70 cursor-not-allowed"
+                        : "bg-green-600"
+                    }`}
                   >
-                    Submit Crypto Payment
+                    {loading ? "Submitting..." : "Submit Crypto Payment"}
                   </button>
                 </div>
               </div>
@@ -434,7 +487,6 @@ export default function Program() {
 
       <Footer />
 
-      {/* Wire details modal */}
       {showWireModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
@@ -462,7 +514,6 @@ export default function Program() {
         </div>
       )}
 
-      {/* Time expired modal */}
       {expired && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center space-y-4">
