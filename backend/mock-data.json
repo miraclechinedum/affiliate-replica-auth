@@ -1,8 +1,17 @@
 {
   "details": {
-    "bankAccountName": "Demo Bank",
-    "bankAccountNumber": "0123456789",
-    "cryptoBtc": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT"
+    "bank": {
+      "bankName": "Demo Bank",
+      "accountName": "Demo Account",
+      "accountNumber": "0123456789",
+      "swift": "",
+      "notes": "Local transfers only"
+    },
+    "crypto": {
+      "btc": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+      "eth": "0x0000000000000000000000000000000000000000",
+      "usdt": "TETHER-DEMO-ADDRESS"
+    }
   },
   "submissions": []
 }

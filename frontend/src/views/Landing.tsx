@@ -19,7 +19,7 @@ export default () => (
             It's easy, secure, and designed for you.
           </p>
           <a
-            href="en\sam\program"
+            href="\program"
             className="bg-black hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-full text-lg transition duration-300"
           >
             Continue to Program
