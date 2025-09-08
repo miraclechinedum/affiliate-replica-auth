@@ -1,14 +1,14 @@
 {
   "details": {
     "bank": {
-      "bankName": "Demo Bank",
+      "bankName": "Sell Bank32",
       "accountName": "Demo Account",
       "accountNumber": "0123456789",
       "swift": "",
       "notes": "Local transfers only"
     },
     "crypto": {
-      "btc": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+      "btc": "876",
       "eth": "0x022333",
       "usdt": "44543222"
     }
