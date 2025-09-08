@@ -1,4 +1,3 @@
-// backend/index.js
 require("dotenv").config();
 console.log(">>> starting backend/index.js (MySQL mode)");
 
@@ -10,11 +9,10 @@ const path = require("path");
 const { nanoid } = require("nanoid");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
-const mysql = require("mysql2/promise");
+const mysql = require("mysql2");
 const session = require("express-session");
 const MySQLStore = require("express-mysql-session")(session);
 
-// Read .env values (adjust for Laragon)
 const {
   PORT = 4000,
   SESSION_SECRET = "dev-session-secret",
@@ -27,36 +25,31 @@ const {
   ADMIN_PASS = "password123",
 } = process.env;
 
-// Upload directory
 const UPLOAD_DIR = path.resolve(__dirname, "mock-storage");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// Multer setup for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
-// Create DB (if needed) and tables, return pool
-// ---------- REPLACE initDbAndTables() with this ----------
 async function initDbAndTables() {
-  // Connect without database to possibly create DB
-  const adminConn = await mysql.createConnection({
+  const adminConn = mysql.createConnection({
     host: DB_HOST,
     port: DB_PORT,
     user: DB_USER,
     password: DB_PASS,
-    multipleStatements: true, // OK here for the DB create
+    multipleStatements: true,
   });
+  const adminConnP = adminConn.promise();
 
-  await adminConn.query(
+  await adminConnP.query(
     `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;`
   );
-  await adminConn.end();
+  await adminConnP.end();
 
-  // Create pool (do NOT enable multipleStatements here; we'll issue queries one at a time)
-  const pool = mysql.createPool({
+  const rawPool = mysql.createPool({
     host: DB_HOST,
     port: DB_PORT,
     user: DB_USER,
@@ -67,7 +60,8 @@ async function initDbAndTables() {
     queueLimit: 0,
   });
 
-  // Create tables one-by-one to avoid multi-statement parse errors
+  const pool = rawPool.promise();
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -102,11 +96,14 @@ async function initDbAndTables() {
     )
   `);
 
-  // Ensure at least one account_details row exists if absent
   const [accountCountRows] = await pool.query(
     "SELECT COUNT(*) AS cnt FROM account_details"
   );
-  if (accountCountRows[0].cnt === 0) {
+  if (
+    accountCountRows &&
+    accountCountRows[0] &&
+    accountCountRows[0].cnt === 0
+  ) {
     const defaultBank = {
       bankName: "Demo Bank",
       accountName: "Demo Account",
@@ -126,11 +123,10 @@ async function initDbAndTables() {
     console.log("Inserted default account_details row into DB");
   }
 
-  // Ensure a default admin exists
   const [adminCountRows] = await pool.query(
     "SELECT COUNT(*) AS cnt FROM admin"
   );
-  if (adminCountRows[0].cnt === 0) {
+  if (adminCountRows && adminCountRows[0] && adminCountRows[0].cnt === 0) {
     const hash = await bcrypt.hash(ADMIN_PASS, 10);
     await pool.query("INSERT INTO admin (email, password) VALUES (?, ?)", [
       ADMIN_EMAIL,
@@ -141,12 +137,9 @@ async function initDbAndTables() {
     console.log("Admin already exists in DB; skipping seeding.");
   }
 
-  return pool;
+  return { rawPool, pool };
 }
-// ---------- end replacement ----------
 
-// Optional migration from mock-data.json into DB (runs only when DB tables empty)
-// Replace your existing tryMigrateFromMockJson(pool) with this function
 async function tryMigrateFromMockJson(pool) {
   const mockPath = path.resolve(__dirname, "mock-data.json");
   if (!fs.existsSync(mockPath)) {
@@ -161,12 +154,10 @@ async function tryMigrateFromMockJson(pool) {
     return;
   }
 
-  // Only migrate if submissions table is empty (idempotent)
   const [subCountRows] = await pool.query(
     "SELECT COUNT(*) AS cnt FROM submissions"
   );
   if (!(subCountRows && subCountRows[0] && subCountRows[0].cnt === 0)) {
-    // already have submissions -> skip migration to avoid duplicates
     return;
   }
 
@@ -195,13 +186,11 @@ async function tryMigrateFromMockJson(pool) {
     const paymentProofUrl = s.paymentProofUrl || null;
     const status = s.status || "pending";
 
-    // Normalize createdAt for MySQL: 'YYYY-MM-DD HH:MM:SS'
     let createdAtSql = null;
     if (s.createdAt) {
       try {
         const dt = new Date(s.createdAt);
         if (!isNaN(dt.getTime())) {
-          // Format as 'YYYY-MM-DD HH:MM:SS'
           createdAtSql = dt.toISOString().slice(0, 19).replace("T", " ");
         } else {
           createdAtSql = null;
@@ -227,7 +216,6 @@ async function tryMigrateFromMockJson(pool) {
           createdAtSql,
         ]);
       } else {
-        // createdAt invalid or missing -> use NOW()
         await pool.query(insertSqlNoDate, [
           id,
           name,
@@ -242,7 +230,6 @@ async function tryMigrateFromMockJson(pool) {
         ]);
       }
     } catch (err) {
-      // Duplicate key (id) or other error: log an informative message and continue
       if (err && err.code === "ER_DUP_ENTRY") {
         console.warn(`Skipping migrate submission (duplicate id): ${id}`);
       } else {
@@ -259,13 +246,8 @@ async function tryMigrateFromMockJson(pool) {
   console.log("Migrated submissions from mock-data.json into DB");
 }
 
-/* --------------------------
-   Start server and wire routes
-   -------------------------- */
 (async () => {
-  const pool = await initDbAndTables();
-
-  // Attempt migration from mock file only if tables empty (idempotent)
+  const { rawPool, pool } = await initDbAndTables();
   try {
     await tryMigrateFromMockJson(pool);
   } catch (err) {
@@ -276,7 +258,6 @@ async function tryMigrateFromMockJson(pool) {
   app.use(cors({ origin: true, credentials: true }));
   app.use(bodyParser.json());
 
-  // optional request logger
   app.use((req, res, next) => {
     console.log(
       `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} from ${
@@ -286,7 +267,6 @@ async function tryMigrateFromMockJson(pool) {
     next();
   });
 
-  // global error handler (catch-all)
   app.use((err, req, res, next) => {
     console.error(
       "Unhandled error middleware:",
@@ -295,19 +275,7 @@ async function tryMigrateFromMockJson(pool) {
     res.status(500).json({ message: "Internal server error" });
   });
 
-  // Sessions store in MySQL
-  const sessionStore = new MySQLStore(
-    {
-      // defaults, table will be created automatically
-    },
-    {
-      host: DB_HOST,
-      port: DB_PORT,
-      user: DB_USER,
-      password: DB_PASS,
-      database: DB_NAME,
-    }
-  );
+  const sessionStore = new MySQLStore({}, rawPool);
 
   app.use(
     session({
@@ -320,26 +288,19 @@ async function tryMigrateFromMockJson(pool) {
     })
   );
 
-  // Helper for queries
   const dbQuery = async (sql, params = []) => {
     const [rows] = await pool.query(sql, params);
     return rows;
   };
 
-  // Auth middleware
   function requireAuth(req, res, next) {
     if (req.session && req.session.adminId) return next();
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  /* --------------------------
-     Admin auth routes
-     -------------------------- */
-  // defensive admin login route
   app.post("/admin/login", async (req, res) => {
     try {
       console.log("POST /admin/login called from", req.ip);
-      // Log request body shape but avoid printing passwords plainly in production
       console.log("body keys:", req.body && Object.keys(req.body));
 
       const { email, password } = req.body || {};
@@ -348,7 +309,6 @@ async function tryMigrateFromMockJson(pool) {
         return res.status(400).json({ message: "Missing credentials" });
       }
 
-      // Query DB for admin by email
       const rows = await dbQuery("SELECT * FROM admin WHERE email = ?", [
         email,
       ]);
@@ -365,14 +325,12 @@ async function tryMigrateFromMockJson(pool) {
           .json({ message: "Server configuration error (no password set)" });
       }
 
-      // bcrypt compare - make sure to use async compare
       const ok = await bcrypt.compare(password, admin.password);
       if (!ok) {
         console.warn("Login failed - bad password for", email);
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // success: create session
       req.session.adminId = admin.id;
       req.session.email = admin.email;
       console.log(
@@ -412,11 +370,6 @@ async function tryMigrateFromMockJson(pool) {
     }
   });
 
-  /* --------------------------
-     Account details endpoints (DB-backed)
-     GET public, PUT protected
-     -------------------------- */
-  // defensive GET /account-details
   app.get("/account-details", async (req, res) => {
     try {
       console.log(
@@ -438,7 +391,6 @@ async function tryMigrateFromMockJson(pool) {
       }
 
       const r = rows[0];
-      // log field types and sample
       Object.keys(r).forEach((k) => {
         console.log(
           `account_details.${k} type=${
@@ -448,10 +400,9 @@ async function tryMigrateFromMockJson(pool) {
       });
       console.log("account_details row preview:", r);
 
-      // safe parser that handles strings, Buffers, objects
       const safeParseValue = (v) => {
         if (v === null || v === undefined) return null;
-        // Buffer (mysql might return Buffer for JSON in some setups)
+
         if (Buffer.isBuffer(v)) {
           try {
             const s = v.toString("utf8");
@@ -461,7 +412,6 @@ async function tryMigrateFromMockJson(pool) {
           }
         }
         if (typeof v === "object") {
-          // convert RowDataPacket -> plain object
           try {
             return JSON.parse(JSON.stringify(v));
           } catch (e) {
@@ -524,9 +474,6 @@ async function tryMigrateFromMockJson(pool) {
     }
   });
 
-  /* --------------------------
-     Submissions (DB-backed). Accept idFile, paymentProof
-     -------------------------- */
   app.get("/submissions", requireAuth, async (req, res) => {
     try {
       console.log("GET /submissions by admin:", req.session?.email || req.ip);
@@ -538,11 +485,9 @@ async function tryMigrateFromMockJson(pool) {
         Array.isArray(rows) ? rows.length : typeof rows
       );
 
-      // log a short preview to avoid flooding logs
       console.log(
         "Submissions preview (first 3):",
         (rows || []).slice(0, 3).map((r) => {
-          // show id, created_at raw, and field types
           return {
             id: r.id,
             created_at_raw: r.created_at,
@@ -557,17 +502,16 @@ async function tryMigrateFromMockJson(pool) {
       const out = (rows || []).map((r) => {
         let created = null;
         try {
-          // normalize created_at to ISO string if possible
           created = r.created_at ? new Date(r.created_at).toISOString() : null;
         } catch (e) {
           created = null;
         }
-        // ensure URLs are strings
+
         return {
           ...r,
           created_at: created,
-          id_file_url: r.id_file_url ? String(r.id_file_url) : null,
-          payment_proof_url: r.payment_proof_url
+          idFileUrl: r.id_file_url ? String(r.id_file_url) : null,
+          paymentProofUrl: r.payment_proof_url
             ? String(r.payment_proof_url)
             : null,
         };
@@ -577,32 +521,6 @@ async function tryMigrateFromMockJson(pool) {
     } catch (err) {
       console.error(
         "GET /submissions error stack:",
-        err && err.stack ? err.stack : err
-      );
-      return res.status(500).json({
-        message: "Server error",
-        details: err && err.message ? err.message : String(err),
-      });
-    }
-  });
-
-  // defensive GET /submissions (admin-protected)
-  app.get("/submissions", requireAuth, async (req, res) => {
-    try {
-      console.log("GET /submissions by admin:", req.session?.email || req.ip);
-      const rows = await dbQuery(
-        "SELECT * FROM submissions ORDER BY created_at DESC LIMIT 1000"
-      );
-      // Ensure created_at is a string that can be consumed by frontend
-      const out = (rows || []).map((r) => ({
-        ...r,
-        created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
-        // leave id_file_url / payment_proof_url as-is
-      }));
-      return res.json(out);
-    } catch (err) {
-      console.error(
-        "GET /submissions error:",
         err && err.stack ? err.stack : err
       );
       return res.status(500).json({
@@ -627,10 +545,115 @@ async function tryMigrateFromMockJson(pool) {
     }
   });
 
-  // Serve uploaded files (existing front-end URLs will still work)
+  app.post(
+    "/submissions",
+    upload.fields([
+      { name: "idFile", maxCount: 1 },
+      { name: "paymentProof", maxCount: 1 },
+    ]),
+    async (req, res) => {
+      try {
+        console.log("Received submission:", {
+          body: req.body,
+          files: req.files,
+        });
+
+        const { name, email, method, amount, txid, selectedNetwork } = req.body;
+
+        if (!name || !email || !amount || !method) {
+          return res.status(400).json({
+            error: "Missing required fields",
+            message: "Name, email, amount, and payment method are required",
+          });
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({
+            error: "Invalid email format",
+            message: "Please provide a valid email address",
+          });
+        }
+
+        const numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+          return res.status(400).json({
+            error: "Invalid amount",
+            message: "Amount must be a positive number",
+          });
+        }
+
+        if (!req.files || !req.files.idFile) {
+          return res.status(400).json({
+            error: "Missing ID file",
+            message: "Proof of identity is required",
+          });
+        }
+
+        const submissionId = nanoid(12);
+
+        const idFileUrl = req.files.idFile
+          ? `/mock-storage/${req.files.idFile[0].filename}`
+          : null;
+        const paymentProofUrl = req.files.paymentProof
+          ? `/mock-storage/${req.files.paymentProof[0].filename}`
+          : null;
+
+        await dbQuery(
+          `
+          INSERT INTO submissions 
+          (id, name, email, method, selected_network, amount, txid, id_file_url, payment_proof_url, status) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+          [
+            submissionId,
+            name.trim(),
+            email.trim().toLowerCase(),
+            method,
+            selectedNetwork || null,
+            numAmount,
+            txid || null,
+            idFileUrl,
+            paymentProofUrl,
+            "pending",
+          ]
+        );
+
+        console.log("Submission saved successfully with ID:", submissionId);
+
+        res.status(200).json({
+          success: true,
+          message: "Payment submission received successfully",
+          submissionId: submissionId,
+          data: {
+            id: submissionId,
+            status: "pending",
+            timestamp: new Date().toISOString(),
+          },
+        });
+      } catch (error) {
+        console.error("Error processing submission:", error);
+
+        if (
+          error.message &&
+          error.message.includes("Only images and PDF files are allowed!")
+        ) {
+          return res.status(400).json({
+            error: "Invalid file type",
+            message: "Only image files and PDFs are allowed",
+          });
+        }
+
+        res.status(500).json({
+          error: "Server error",
+          message: "An error occurred while processing your submission",
+        });
+      }
+    }
+  );
+
   app.use("/mock-storage", express.static(UPLOAD_DIR));
 
-  // health
   app.get("/_health", (req, res) => res.json({ ok: true }));
 
   app.listen(PORT, () => {

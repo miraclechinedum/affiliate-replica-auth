@@ -1,10 +1,30 @@
-// frontend/src/views/Program.tsx
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
-import Header from "../components/Header";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+// import Header from "../components/Header";
 import Footer from "../components/Footer";
 import api from "../utils/api";
 import { useNavigate } from "react-router-dom";
+import {
+  Shield,
+  Clock,
+  Copy,
+  CheckCircle,
+  AlertTriangle,
+  Upload,
+  CreditCard,
+  Wallet,
+  User,
+  Mail,
+  DollarSign,
+  FileText,
+  X,
+  RefreshCw,
+  Lock,
+  Zap,
+} from "lucide-react";
 
 type AccountDetails = {
   bank?: {
@@ -22,9 +42,30 @@ type AccountDetails = {
   };
 };
 
+const LoadingSpinner = () => (
+  <motion.div
+    animate={{ rotate: 360 }}
+    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+    className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+  />
+);
+
+const SecurityBadge = () => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.9 }}
+    animate={{ opacity: 1, scale: 1 }}
+    className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm text-green-800"
+  >
+    <Shield className="h-4 w-4" />
+    <span className="font-medium">256-bit SSL Encrypted</span>
+  </motion.div>
+);
+
 export default function Program() {
   const [pageLoading, setPageLoading] = useState(true);
-  const [loaderText, setLoaderText] = useState("Encrypting...");
+  const [loaderText, setLoaderText] = useState(
+    "Initializing secure connection..."
+  );
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -33,7 +74,6 @@ export default function Program() {
   const [method, setMethod] = useState<"crypto" | "wire">("crypto");
   const [amount, setAmount] = useState("");
   const [txid, setTxid] = useState("");
-  const [status, setStatus] = useState("");
   const [expired, setExpired] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -45,35 +85,48 @@ export default function Program() {
     "USDT"
   );
   const [showWireModal, setShowWireModal] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Refs for clearing file inputs
   const idFileRef = useRef<HTMLInputElement | null>(null);
   const paymentProofRef = useRef<HTMLInputElement | null>(null);
 
   const navigate = useNavigate();
 
-  // Page loader effect
   useEffect(() => {
-    const t1 = setTimeout(
-      () => setLoaderText("Proceeding to secure payment..."),
-      3000
-    );
-    const t2 = setTimeout(() => setPageLoading(false), 6000);
+    const messages = [
+      "Initializing secure connection...",
+      "Verifying security protocols...",
+      "Establishing encrypted tunnel...",
+      "Loading payment interface...",
+    ];
+
+    let messageIndex = 0;
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % messages.length;
+      setLoaderText(messages[messageIndex]);
+    }, 1500);
+
+    const t2 = setTimeout(() => {
+      clearInterval(messageInterval);
+      setPageLoading(false);
+    }, 6000);
+
     return () => {
-      clearTimeout(t1);
+      clearInterval(messageInterval);
       clearTimeout(t2);
     };
   }, []);
 
-  // Fetch account details
   useEffect(() => {
     api
       .get("/account-details")
       .then((res) => setAccountDetails(res.data))
-      .catch(() => setAccountDetails(null));
+      .catch(() => {
+        setAccountDetails(null);
+        toast.error("Failed to load payment details");
+      });
   }, []);
 
-  // Countdown timer
   useEffect(() => {
     if (expired) return;
     if (timeLeft <= 0) {
@@ -100,25 +153,26 @@ export default function Program() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setStatus("Address copied to clipboard");
-      setTimeout(() => setStatus(""), 2500);
+      setCopied(true);
+      toast.success("Address copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
     } catch {
-      setStatus("Copy failed — please copy manually");
+      toast.error("Failed to copy - please copy manually");
     }
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (expired) {
-      setStatus("Session expired");
+      toast.error("Session expired - please restart");
       return;
     }
     if (!name || !email || !amount) {
-      setStatus("Please complete required fields");
+      toast.error("Please complete all required fields");
       return;
     }
     if (method === "crypto" && !depositAddress) {
-      setStatus("Deposit address not available — contact admin");
+      toast.error("Deposit address not available - contact support");
       return;
     }
 
@@ -137,8 +191,11 @@ export default function Program() {
       await api.post("/submissions", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setStatus("✅ Payment submitted successfully!");
-      // Reset form to defaults
+
+      toast.success(
+        "Payment submitted successfully! You will receive confirmation shortly."
+      );
+
       setName("");
       setEmail("");
       setIdFile(null);
@@ -147,13 +204,11 @@ export default function Program() {
       setAmount("");
       setSelectedCrypto("USDT");
       setMethod("crypto");
-      setTimeout(() => setStatus(""), 3000);
 
-      // Clear the file inputs visually
       if (idFileRef.current) idFileRef.current.value = "";
       if (paymentProofRef.current) paymentProofRef.current.value = "";
     } catch (err: any) {
-      setStatus(
+      toast.error(
         "Submission failed: " + (err?.response?.data?.message || err.message)
       );
     } finally {
@@ -174,365 +229,701 @@ export default function Program() {
   const renderBankDetails = () => {
     const b = accountDetails?.bank;
     if (!b)
-      return <p className="text-sm text-gray-600">No bank details available</p>;
+      return (
+        <div className="text-center py-4">
+          <AlertTriangle className="h-8 w-8 text-orange-500 mx-auto mb-2" />
+          <p className="text-gray-600">No bank details available</p>
+        </div>
+      );
+
     return (
-      <div className="space-y-1 text-sm">
-        <div>
-          <strong>Bank:</strong> {b.bankName || "-"}
-        </div>
-        <div>
-          <strong>Account name:</strong> {b.accountName || "-"}
-        </div>
-        <div>
-          <strong>Account number:</strong> {b.accountNumber || "-"}
-        </div>
-        {b.swift && (
-          <div>
-            <strong>SWIFT:</strong> {b.swift}
+      <div className="space-y-4">
+        <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+          <div className="flex justify-between">
+            <span className="font-medium text-gray-700">Bank Name:</span>
+            <span className="text-gray-900">{b.bankName || "—"}</span>
           </div>
-        )}
+          <div className="flex justify-between">
+            <span className="font-medium text-gray-700">Account Name:</span>
+            <span className="text-gray-900">{b.accountName || "—"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="font-medium text-gray-700">Account Number:</span>
+            <span className="text-gray-900 font-mono">
+              {b.accountNumber || "—"}
+            </span>
+          </div>
+          {b.swift && (
+            <div className="flex justify-between">
+              <span className="font-medium text-gray-700">SWIFT/BIC:</span>
+              <span className="text-gray-900 font-mono">{b.swift}</span>
+            </div>
+          )}
+        </div>
         {b.notes && (
-          <div className="text-xs text-gray-500">Notes: {b.notes}</div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-blue-800">
+              <strong>Important Notes:</strong> {b.notes}
+            </p>
+          </div>
         )}
       </div>
     );
   };
 
-  // Display loader overlay on page load
+  const getCryptoIcon = (crypto: string) => {
+    switch (crypto) {
+      case "BTC":
+        return "₿";
+      case "ETH":
+        return "Ξ";
+      case "USDT":
+        return "₮";
+      default:
+        return "₿";
+    }
+  };
+
   if (pageLoading) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white z-50">
-        <div className="loader mb-4 animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-12 h-12"></div>
-        <p className="text-lg">{loaderText}</p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white z-50"
+      >
+        <motion.div
+          animate={{
+            rotate: 360,
+            scale: [1, 1.1, 1],
+          }}
+          transition={{
+            rotate: { duration: 2, repeat: Infinity, ease: "linear" },
+            scale: { duration: 1, repeat: Infinity },
+          }}
+          className="w-16 h-16 border-4 border-white border-t-transparent rounded-full mb-6"
+        />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="text-center"
+        >
+          <p className="text-xl font-semibold mb-2">{loaderText}</p>
+          <div className="flex items-center justify-center space-x-2 text-sm text-blue-200">
+            <Lock className="h-4 w-4" />
+            <span className="text-[#f2f2f2]">Secure Payment Portal</span>
+          </div>
+        </motion.div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* <Header /> */}
 
-      <div
-        className={`sticky top-0 z-50 p-3 text-white text-center font-semibold ${
-          timeLeft <= 300 ? "bg-red-600" : "bg-blue-600"
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        toastClassName="shadow-lg"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`sticky top-0 z-40 transition-colors duration-300 ${
+          timeLeft <= 300
+            ? "bg-gradient-to-r from-red-600 to-red-700"
+            : "bg-gradient-to-r from-blue-600 to-indigo-600"
         }`}
       >
-        You have <span id="countdownTime">{formatTime(timeLeft)}</span> to
-        complete the transaction
-      </div>
-
-      <main className="flex items-start justify-center min-h-screen p-6">
-        <div className="w-full max-w-2xl bg-white p-8 rounded-lg shadow space-y-6">
-          <img
-            src="https://joinrobin.affiliatepartnerpath.pro/en/sam/program/logo.png"
-            alt="Logo"
-            className="w-56 mx-auto"
-          />
-          <h2 className="text-2xl font-bold text-center">Deposit Funds</h2>
-
-          <form onSubmit={submit} className="space-y-4">
-            {/* Full Name */}
-            <div>
-              <label className="block text-sm font-medium">Full Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full border p-2 rounded"
-                required
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full border p-2 rounded"
-                required
-              />
-            </div>
-
-            {/* Upload Proof of ID */}
-            {/* <div>
-              <label className="block text-sm font-medium">
-                Upload Proof of ID
-              </label>
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
-                className="w-full"
-              />
-            </div> */}
-
-            <div>
-              <label className="block mb-1">Proof of ID</label>
-              <input
-                ref={idFileRef}
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
-                className="w-full"
-                required
-              />
-            </div>
-
-            {/* Payment Method Tabs */}
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Payment Method
-              </label>
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setMethod("wire")}
-                  className={`flex-1 p-2 rounded ${
-                    method === "wire" ? "bg-gray-100 font-semibold" : "bg-white"
-                  }`}
-                >
-                  Wire Transfer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMethod("crypto")}
-                  className={`flex-1 p-2 rounded ${
-                    method === "crypto"
-                      ? "bg-gray-100 font-semibold"
-                      : "bg-white"
-                  }`}
-                >
-                  Crypto
-                </button>
-              </div>
-            </div>
-
-            {/* Wire Transfer */}
-            {method === "wire" && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold">
-                  Wire Transfer Instructions
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Bank details will be provided upon request. Please ensure your
-                  name and email are correct before requesting.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => setShowWireModal(true)}
-                  className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded w-full"
-                >
-                  Request Details
-                </button>
-
-                <div>
-                  <label className="block text-sm font-medium">
-                    Amount Sent (USD)
-                  </label>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full border p-2 rounded"
-                    placeholder="e.g., 500.00"
-                    required
-                  />
-                </div>
-
-                {/* Upload Payment Proof */}
-                <div>
-                  <label className="block text-sm font-medium">
-                    Upload Payment Proof
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) =>
-                      setPaymentProof(e.target.files?.[0] ?? null)
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className={`flex-1 px-4 py-2 rounded text-white ${
-                      loading
-                        ? "bg-green-600 animate-pulse opacity-70 cursor-not-allowed"
-                        : "bg-green-600"
-                    }`}
-                  >
-                    {loading ? "Submitting..." : "Submit Wire Payment"}
-                  </button>
-                </div>
-              </div>
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-center space-x-3 text-white">
+            <Clock className="h-5 w-5" />
+            <span className="font-semibold">
+              Session expires in:{" "}
+              <span className="font-mono text-lg">{formatTime(timeLeft)}</span>
+            </span>
+            {timeLeft <= 300 && (
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              >
+                <AlertTriangle className="h-5 w-5 text-yellow-300" />
+              </motion.div>
             )}
+          </div>
+        </div>
+      </motion.div>
 
-            {/* Crypto */}
-            {method === "crypto" && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold">
-                  Crypto Deposit Instructions
-                </h3>
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-6 border-b border-gray-100">
+            <div className="text-center space-y-4">
+              <motion.img
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                src="https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&cs=tinysrgb&w=200&h=60&fit=crop"
+                alt="Secure Payment Portal"
+                className="h-16 mx-auto rounded-lg shadow-sm"
+              />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  Secure Payment Portal
+                </h1>
+                <p className="text-gray-600">
+                  Complete your transaction safely and securely
+                </p>
+              </div>
+              <SecurityBadge />
+            </div>
+          </div>
 
-                <div>
-                  <label className="block text-sm font-medium">
-                    Select Cryptocurrency
-                  </label>
-                  <select
-                    className="w-full border p-2 rounded"
-                    value={selectedCrypto}
-                    onChange={(e) => setSelectedCrypto(e.target.value as any)}
-                  >
-                    <option value="USDT">Tether (USDT)</option>
-                    <option value="BTC">Bitcoin (BTC)</option>
-                    <option value="ETH">Ethereum (ETH)</option>
-                  </select>
+          <div className="p-8">
+            <form onSubmit={submit} className="space-y-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <User className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Personal Information
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name *
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="Enter your full name"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address *
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="Enter your email address"
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium">
-                    Deposit Address
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Proof of Identity *
                   </label>
                   <div className="relative">
                     <input
-                      type="text"
-                      readOnly
-                      value={depositAddress}
-                      className="w-full border p-2 rounded pr-12 bg-gray-50"
+                      ref={idFileRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      required
                     />
-                    <button
-                      type="button"
-                      aria-label="Copy deposit address"
-                      onClick={() => copyToClipboard(depositAddress)}
-                      className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-600 hover:text-gray-900"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="w-5 h-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M8 16h8M8 8h8m-8 0h8M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2h-4l-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </button>
                   </div>
-                  <p className="text-xs mt-1 text-red-600">
-                    <strong>Important:</strong> Only send {selectedCrypto} (
-                    {depositAddress || "address not available"}) to this
-                    address. Sending other cryptos will result in loss of funds.
+                  <p className="text-xs text-gray-500 mt-1">
+                    Upload a clear photo of your government-issued ID (passport,
+                    driver's license, etc.)
                   </p>
                 </div>
+              </motion.div>
 
-                <div>
-                  <label className="block text-sm font-medium">
-                    Amount Sent (USD)
-                  </label>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full border p-2 rounded"
-                    placeholder="e.g., 100.00"
-                    required
-                  />
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Payment Method
+                  </h2>
                 </div>
 
-                {/* Upload Payment Proof */}
-                <div>
-                  <label className="block text-sm font-medium">
-                    Upload Payment Proof
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) =>
-                      setPaymentProof(e.target.files?.[0] ?? null)
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className={`flex-1 px-4 py-2 rounded text-white ${
-                      loading
-                        ? "bg-green-600 animate-pulse opacity-70 cursor-not-allowed"
-                        : "bg-green-600"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setMethod("crypto")}
+                    className={`p-4 rounded-xl border-2 transition-all ${
+                      method === "crypto"
+                        ? "border-blue-500 bg-blue-50 shadow-md"
+                        : "border-gray-200 bg-white hover:border-gray-300"
                     }`}
                   >
-                    {loading ? "Submitting..." : "Submit Crypto Payment"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </form>
+                    <div className="flex items-center space-x-3">
+                      <Wallet
+                        className={`h-6 w-6 ${
+                          method === "crypto"
+                            ? "text-blue-600"
+                            : "text-gray-400"
+                        }`}
+                      />
+                      <div className="text-left">
+                        <div
+                          className={`font-semibold ${
+                            method === "crypto"
+                              ? "text-blue-900"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          Cryptocurrency
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Bitcoin, Ethereum, USDT
+                        </div>
+                      </div>
+                    </div>
+                  </motion.button>
 
-          {status && <div className="text-sm text-gray-700">{status}</div>}
-        </div>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setMethod("wire")}
+                    className={`p-4 rounded-xl border-2 transition-all ${
+                      method === "wire"
+                        ? "border-blue-500 bg-blue-50 shadow-md"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <CreditCard
+                        className={`h-6 w-6 ${
+                          method === "wire" ? "text-blue-600" : "text-gray-400"
+                        }`}
+                      />
+                      <div className="text-left">
+                        <div
+                          className={`font-semibold ${
+                            method === "wire"
+                              ? "text-blue-900"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          Wire Transfer
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Bank to bank transfer
+                        </div>
+                      </div>
+                    </div>
+                  </motion.button>
+                </div>
+              </motion.div>
+
+              <AnimatePresence>
+                {method === "wire" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                      <div className="flex items-start space-x-3">
+                        <CreditCard className="h-6 w-6 text-blue-600 mt-1" />
+                        <div>
+                          <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                            Wire Transfer Instructions
+                          </h3>
+                          <p className="text-blue-800 mb-4">
+                            Click below to view our bank details. Ensure your
+                            information is correct before requesting.
+                          </p>
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setShowWireModal(true)}
+                            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <FileText className="h-4 w-4" />
+                            <span>View Bank Details</span>
+                          </motion.button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount Sent (USD) *
+                      </label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="number"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Payment Proof
+                      </label>
+                      <input
+                        ref={paymentProofRef}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) =>
+                          setPaymentProof(e.target.files?.[0] ?? null)
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Upload your wire transfer receipt or confirmation
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {method === "crypto" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <div className="border border-black-200 rounded-xl p-6">
+                      <div className="flex items-start space-x-3">
+                        <Wallet className="h-6 w-6 text-blue-600 mt-1" />
+                        <div>
+                          <h3 className="text-lg font-semibold text-black-900 mb-2">
+                            Cryptocurrency Payment
+                          </h3>
+                          <p className="text-black-800">
+                            Send your cryptocurrency to the address below. Only
+                            send the selected currency type.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Cryptocurrency
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        {(["USDT", "BTC", "ETH"] as const).map((crypto) => (
+                          <motion.button
+                            key={crypto}
+                            type="button"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setSelectedCrypto(crypto)}
+                            className={`p-3 rounded-lg border-2 transition-all ${
+                              selectedCrypto === crypto
+                                ? "border-blue-500 bg-blue-50 shadow-md"
+                                : "border-gray-200 bg-white hover:border-gray-300"
+                            }`}
+                          >
+                            <div className="text-center">
+                              <div
+                                className={`text-2xl mb-1 ${
+                                  selectedCrypto === crypto
+                                    ? "text-black-600"
+                                    : "text-black-200"
+                                }`}
+                              >
+                                {getCryptoIcon(crypto)}
+                              </div>
+                              <div
+                                className={`font-semibold text-sm ${
+                                  selectedCrypto === crypto
+                                    ? "text-black-600"
+                                    : "text-black-200"
+                                }`}
+                              >
+                                {crypto}
+                              </div>
+                            </div>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Deposit Address
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          readOnly
+                          value={depositAddress}
+                          className="w-full pr-12 py-3 px-4 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                          placeholder="Loading address..."
+                        />
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => copyToClipboard(depositAddress)}
+                          className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-600 hover:text-blue-600 transition-colors"
+                        >
+                          {copied ? (
+                            <CheckCircle className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <Copy className="h-5 w-5" />
+                          )}
+                        </motion.button>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-2">
+                        <div className="flex items-start space-x-2">
+                          <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-red-800">
+                            <strong>Critical:</strong> Only send{" "}
+                            {selectedCrypto} to this address. Sending other
+                            cryptocurrencies will result in permanent loss of
+                            funds.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount Sent (USD) *
+                      </label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="number"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Payment Proof
+                      </label>
+                      <input
+                        ref={paymentProofRef}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) =>
+                          setPaymentProof(e.target.files?.[0] ?? null)
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Upload a screenshot of your transaction confirmation
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="pt-6 border-t border-gray-200"
+              >
+                <motion.button
+                  type="submit"
+                  disabled={loading || expired}
+                  whileHover={{ scale: loading ? 1 : 1.02 }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                  className={`w-full flex items-center justify-center space-x-3 px-6 py-4 rounded-xl font-semibold text-lg transition-all ${
+                    loading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-black hover:bg-neutral-900 shadow-lg hover:shadow-xl"
+                  } text-white`}
+                >
+                  {loading ? (
+                    <>
+                      <LoadingSpinner />
+                      <span>Processing Payment...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        I have paid via{" "}
+                        {method === "crypto" ? "Crypto" : "Wire"}
+                      </span>
+                      <Zap className="h-5 w-5" />
+                    </>
+                  )}
+                </motion.button>
+              </motion.div>
+            </form>
+          </div>
+        </motion.div>
       </main>
 
       <Footer />
 
-      {showWireModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
-            <h3 className="text-lg font-semibold">Wire Transfer Details</h3>
-            <div>{renderBankDetails()}</div>
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => setShowWireModal(false)}
-                className="px-4 py-2 bg-gray-300 rounded"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    JSON.stringify(accountDetails?.bank || {})
-                  );
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded"
-              >
-                Copy Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showWireModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            >
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Wire Transfer Details
+                  </h3>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setShowWireModal(false)}
+                    className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    <X className="h-5 w-5 text-gray-500" />
+                  </motion.button>
+                </div>
+              </div>
 
-      {expired && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full text-center space-y-4">
-            <h3 className="text-xl font-bold">TIME EXPIRED</h3>
-            <p>
-              We are sorry, too much time has passed. Please go back to restart
-              this process.
-            </p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={restartProcess}
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+              <div className="p-6">
+                {renderBankDetails()}
+
+                <div className="flex space-x-3 mt-6">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowWireModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    Close
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      const details = JSON.stringify(
+                        accountDetails?.bank || {},
+                        null,
+                        2
+                      );
+                      navigator.clipboard.writeText(details);
+                      toast.success("Bank details copied!");
+                    }}
+                    className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    <Copy className="h-4 w-4" />
+                    <span>Copy Details</span>
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {expired && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring" }}
+                className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"
               >
-                Restart Process
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                <AlertTriangle className="h-8 w-8 text-red-600" />
+              </motion.div>
+
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Session Expired
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Your session has timed out for security reasons. Please restart
+                the process to continue.
+              </p>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={restartProcess}
+                className="flex items-center justify-center space-x-2 w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Restart Process</span>
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

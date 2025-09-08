@@ -1,10 +1,32 @@
-// frontend/src/views/AdminDashboard.tsx
 import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import api from "../utils/api";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import {
+  Save,
+  RefreshCw,
+  Download,
+  X,
+  Search,
+  Filter,
+  ChevronDown,
+  ExternalLink,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  Users,
+  CreditCard,
+  Wallet,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Image as ImageIcon,
+  Check,
+} from "lucide-react";
 
 type DetailsShape = {
   bank?: {
@@ -38,6 +60,33 @@ type Submission = {
   created_at?: string | null;
 };
 
+const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+  >
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-600">{title}</p>
+        <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+        {trend && (
+          <p
+            className={`text-sm mt-2 ${
+              trend > 0 ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {trend > 0 ? "↗" : "↘"} {Math.abs(trend)}% vs last month
+          </p>
+        )}
+      </div>
+      <div className={`p-3 rounded-lg ${color}`}>
+        <Icon className="h-6 w-6 text-white" />
+      </div>
+    </div>
+  </motion.div>
+);
+
 export default function AdminDashboard() {
   const [details, setDetails] = useState<DetailsShape | null>(null);
   const [subs, setSubs] = useState<Submission[]>([]);
@@ -47,7 +96,6 @@ export default function AdminDashboard() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
 
-  // Table controls
   const [search, setSearch] = useState("");
   const [filterMethod, setFilterMethod] = useState<"" | "wire" | "crypto">("");
   const [filterStatus, setFilterStatus] = useState<
@@ -62,7 +110,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const load = async () => {
@@ -96,7 +143,7 @@ export default function AdminDashboard() {
         bank: details?.bank || {},
         crypto: details?.crypto || {},
       });
-      toast.success("Account details saved");
+      toast.success("Account details saved successfully!");
     } catch (err: any) {
       console.error("Save failed", err);
       toast.error(err?.response?.data?.message || "Save failed");
@@ -114,7 +161,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Confirmation modal flow
   function confirmMark(id: string) {
     setConfirmTargetId(id);
     setShowConfirmModal(true);
@@ -127,7 +173,7 @@ export default function AdminDashboard() {
     setUpdatingIds((s) => ({ ...s, [id]: true }));
     try {
       await api.put(`/submissions/${id}/status`, { status: "confirmed" });
-      toast.success("Submission marked confirmed");
+      toast.success("Submission marked as confirmed!");
       await requestReloadSubmissions();
     } catch (err) {
       console.error("Mark confirmed failed", err);
@@ -142,7 +188,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Filters & search
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let out = subs.slice();
@@ -163,12 +208,10 @@ export default function AdminDashboard() {
       });
     }
 
-    // sorting
     out.sort((a, b) => {
       let va: any = a[sortKey];
       let vb: any = b[sortKey];
 
-      // normalize created_at
       if (sortKey === "created_at") {
         va = a.created_at ? new Date(a.created_at).getTime() : 0;
         vb = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -185,16 +228,24 @@ export default function AdminDashboard() {
     return out;
   }, [subs, search, filterMethod, filterStatus, sortKey, sortDir]);
 
-  // pagination
+  const stats = useMemo(() => {
+    const total = subs.length;
+    const pending = subs.filter(
+      (s) => s.status === "pending" || !s.status
+    ).length;
+    const confirmed = subs.filter((s) => s.status === "confirmed").length;
+    const totalAmount = subs.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+
+    return { total, pending, confirmed, totalAmount };
+  }, [subs]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
 
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // CSV export for filtered rows
   const exportCSV = () => {
     const rows = filtered;
     if (!rows.length) {
@@ -220,7 +271,6 @@ export default function AdminDashboard() {
         header
           .map((h) => {
             const v = (r as any)[h] ?? "";
-            // escape quotes
             const s = typeof v === "string" ? v.replace(/"/g, '""') : String(v);
             return `"${s}"`;
           })
@@ -249,8 +299,47 @@ export default function AdminDashboard() {
     setPage(1);
   };
 
+  const SortButton = ({
+    field,
+    children,
+  }: {
+    field: typeof sortKey;
+    children: React.ReactNode;
+  }) => (
+    <button
+      className="flex items-center space-x-1 hover:text-gray-900 transition-colors"
+      onClick={() => {
+        if (sortKey === field) {
+          setSortDir(sortDir === "asc" ? "desc" : "asc");
+        } else {
+          setSortKey(field);
+          setSortDir("desc");
+        }
+      }}
+    >
+      <span>{children}</span>
+      <ArrowUpDown className="h-3 w-3" />
+    </button>
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full"
+          />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
 
       <ToastContainer
@@ -258,343 +347,692 @@ export default function AdminDashboard() {
         autoClose={4000}
         hideProgressBar={false}
         newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        toastClassName="shadow-lg"
       />
 
-      <main className="container flex-1 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Account editor */}
-          <div className="bg-white p-6 rounded shadow">
-            <h4 className="font-semibold mb-4">Account / Bank Details</h4>
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
+          <p className="text-gray-600 mt-2">
+            Manage account details and payment submissions
+          </p>
+        </div>
 
-            <label className="block text-sm">Bank Name</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.bank?.bankName || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  bank: { ...details?.bank, bankName: e.target.value },
-                })
-              }
-            />
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard
+            title="Total Submissions"
+            value={stats.total}
+            icon={Users}
+            trend={12}
+            color="bg-blue-500"
+          />
+          <StatCard
+            title="Pending"
+            value={stats.pending}
+            icon={Clock}
+            trend={-5}
+            color="bg-orange-500"
+          />
+          <StatCard
+            title="Confirmed"
+            value={stats.confirmed}
+            icon={CheckCircle}
+            trend={18}
+            color="bg-green-500"
+          />
+          <StatCard
+            title="Total Amount"
+            value={`$${stats.totalAmount.toLocaleString()}`}
+            icon={DollarSign}
+            trend={25}
+            color="bg-purple-500"
+          />
+        </div>
 
-            <label className="block text-sm">Account Name</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.bank?.accountName || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  bank: { ...details?.bank, accountName: e.target.value },
-                })
-              }
-            />
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="xl:col-span-1"
+          >
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Account Details
+                  </h3>
+                </div>
+              </div>
 
-            <label className="block text-sm">Account Number</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.bank?.accountNumber || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  bank: { ...details?.bank, accountNumber: e.target.value },
-                })
-              }
-            />
+              <div className="p-6 space-y-6">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Bank Information
+                  </h4>
 
-            <label className="block text-sm">SWIFT / BIC</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.bank?.swift || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  bank: { ...details?.bank, swift: e.target.value },
-                })
-              }
-            />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bank Name
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="Enter bank name"
+                        value={details?.bank?.bankName || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            bank: {
+                              ...details?.bank,
+                              bankName: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
 
-            <label className="block text-sm">Notes (optional)</label>
-            <textarea
-              className="w-full border p-2 rounded mb-2"
-              value={details?.bank?.notes || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  bank: { ...details?.bank, notes: e.target.value },
-                })
-              }
-            />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Account Name
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="Enter account name"
+                        value={details?.bank?.accountName || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            bank: {
+                              ...details?.bank,
+                              accountName: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
 
-            <h5 className="mt-4 font-semibold">Crypto Addresses</h5>
-            <label className="block text-sm">BTC Address</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.crypto?.btc || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  crypto: { ...details?.crypto, btc: e.target.value },
-                })
-              }
-            />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Account Number
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="Enter account number"
+                        value={details?.bank?.accountNumber || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            bank: {
+                              ...details?.bank,
+                              accountNumber: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
 
-            <label className="block text-sm">ETH Address</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.crypto?.eth || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  crypto: { ...details?.crypto, eth: e.target.value },
-                })
-              }
-            />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        SWIFT / BIC
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        placeholder="Enter SWIFT code"
+                        value={details?.bank?.swift || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            bank: { ...details?.bank, swift: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
 
-            <label className="block text-sm">USDT Address</label>
-            <input
-              className="w-full border p-2 rounded mb-2"
-              value={details?.crypto?.usdt || ""}
-              onChange={(e) =>
-                setDetails({
-                  ...details!,
-                  crypto: { ...details?.crypto, usdt: e.target.value },
-                })
-              }
-            />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notes (optional)
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                        rows={3}
+                        placeholder="Additional notes"
+                        value={details?.bank?.notes || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            bank: { ...details?.bank, notes: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
 
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={save}
-                className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save Details"}
-              </button>
-              <button
-                onClick={load}
-                className="px-4 py-2 bg-gray-200 rounded"
-                disabled={loading}
-              >
-                {loading ? "Loading..." : "Reload"}
-              </button>
-            </div>
-          </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+                    <Wallet className="h-4 w-4 mr-2" />
+                    Crypto Addresses
+                  </h4>
 
-          {/* Submissions table */}
-          <div className="bg-white p-6 rounded shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold">Submissions</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        BTC Address
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono text-sm"
+                        placeholder="Bitcoin address"
+                        value={details?.crypto?.btc || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            crypto: { ...details?.crypto, btc: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={exportCSV}
-                  className="px-3 py-1 bg-gray-200 rounded text-sm"
-                >
-                  Export CSV
-                </button>
-                <button
-                  onClick={() => {
-                    clearFilters();
-                  }}
-                  className="px-3 py-1 bg-gray-200 rounded text-sm"
-                >
-                  Clear
-                </button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        ETH Address
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono text-sm"
+                        placeholder="Ethereum address"
+                        value={details?.crypto?.eth || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            crypto: { ...details?.crypto, eth: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        USDT Address
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono text-sm"
+                        placeholder="USDT address"
+                        value={details?.crypto?.usdt || ""}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details!,
+                            crypto: {
+                              ...details?.crypto,
+                              usdt: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-3 pt-4 border-t border-gray-100">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={save}
+                    disabled={saving}
+                    className="flex-1 flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    {saving ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                      />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    {saving ? "Saving..." : "Save Details"}
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={load}
+                    disabled={loading}
+                    className="flex items-center justify-center px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                    />
+                  </motion.button>
+                </div>
               </div>
             </div>
+          </motion.div>
 
-            {/* filters */}
-            <div className="flex gap-2 mb-3">
-              <input
-                placeholder="Search name, email, id, txid..."
-                className="flex-1 border p-2 rounded"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-              <select
-                value={filterMethod}
-                onChange={(e) => {
-                  setFilterMethod(e.target.value as any);
-                  setPage(1);
-                }}
-                className="border p-2 rounded"
-              >
-                <option value="">All methods</option>
-                <option value="crypto">Crypto</option>
-                <option value="wire">Wire</option>
-              </select>
-              <select
-                value={filterStatus}
-                onChange={(e) => {
-                  setFilterStatus(e.target.value as any);
-                  setPage(1);
-                }}
-                className="border p-2 rounded"
-              >
-                <option value="">All status</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-              </select>
-            </div>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="xl:col-span-2"
+          >
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <FileText className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Payment Submissions
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Showing {filtered.length} of {subs.length} submissions
+                      </p>
+                    </div>
+                  </div>
 
-            {/* table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr>
-                    <th className="p-2 text-xs">ID</th>
-                    <th className="p-2 text-xs">Name</th>
-                    <th className="p-2 text-xs">Email</th>
-                    <th className="p-2 text-xs">Method</th>
-                    <th className="p-2 text-xs">Network</th>
-                    <th
-                      className="p-2 text-xs cursor-pointer"
-                      onClick={() => {
-                        if (sortKey === "amount")
-                          setSortDir(sortDir === "asc" ? "desc" : "asc");
-                        else setSortKey("amount");
-                      }}
+                  <div className="flex items-center space-x-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={exportCSV}
+                      className="flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
                     >
-                      Amount
-                    </th>
-                    <th
-                      className="p-2 text-xs cursor-pointer"
-                      onClick={() => {
-                        if (sortKey === "created_at")
-                          setSortDir(sortDir === "asc" ? "desc" : "asc");
-                        else setSortKey("created_at");
-                      }}
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={clearFilters}
+                      className="flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
                     >
-                      Date
-                    </th>
-                    <th className="p-2 text-xs">Status</th>
-                    <th className="p-2 text-xs">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.length === 0 && (
+                      <X className="h-4 w-4 mr-1" />
+                      Clear
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      placeholder="Search name, email, ID, txid..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(1);
+                      }}
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <select
+                      value={filterMethod}
+                      onChange={(e) => {
+                        setFilterMethod(e.target.value as any);
+                        setPage(1);
+                      }}
+                      className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white"
+                    >
+                      <option value="">All methods</option>
+                      <option value="crypto">Crypto</option>
+                      <option value="wire">Wire</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => {
+                        setFilterStatus(e.target.value as any);
+                        setPage(1);
+                      }}
+                      className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none bg-white"
+                    >
+                      <option value="">All status</option>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <td colSpan={9} className="p-2 text-sm text-gray-500">
-                        No submissions found
-                      </td>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Customer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Method
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <SortButton field="amount">Amount</SortButton>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <SortButton field="created_at">Date</SortButton>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <SortButton field="status">Status</SortButton>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
-                  )}
-                  {pageRows.map((s) => (
-                    <tr key={s.id} className="border-t">
-                      <td className="p-2 text-xs break-all">{s.id}</td>
-                      <td className="p-2 text-sm">{s.name || "-"}</td>
-                      <td className="p-2 text-sm">{s.email || "-"}</td>
-                      <td className="p-2 text-sm">{s.method || "-"}</td>
-                      <td className="p-2 text-sm">
-                        {s.selectedNetwork || "-"}
-                      </td>
-                      <td className="p-2 text-sm">{s.amount ?? "-"}</td>
-                      <td className="p-2 text-sm">
-                        {s.created_at
-                          ? new Date(s.created_at).toLocaleString()
-                          : "-"}
-                      </td>
-                      <td className="p-2 text-sm">{s.status || "-"}</td>
-                      <td className="p-2 text-sm">
-                        <div className="flex gap-2 items-center">
-                          {s.idFileUrl && (
-                            <a
-                              className="text-blue-600 text-xs"
-                              href={s.idFileUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    <AnimatePresence>
+                      {pageRows.length === 0 && (
+                        <motion.tr
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                        >
+                          <td
+                            colSpan={7}
+                            className="px-6 py-12 text-center text-gray-500"
+                          >
+                            <div className="flex flex-col items-center">
+                              <FileText className="h-12 w-12 text-gray-300 mb-4" />
+                              <p className="text-lg font-medium text-gray-900 mb-1">
+                                No submissions found
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Try adjusting your search or filters
+                              </p>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      )}
+                      {pageRows.map((submission) => (
+                        <motion.tr
+                          key={submission.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="px-6 py-4">
+                            <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                              {submission.id.slice(0, 8)}...
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {submission.name || "—"}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {submission.email || "—"}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  submission.method === "crypto"
+                                    ? "bg-orange-100 text-orange-800"
+                                    : "bg-blue-100 text-blue-800"
+                                }`}
+                              >
+                                {submission.method === "crypto" ? (
+                                  <Wallet className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                )}
+                                {submission.method || "—"}
+                              </span>
+                              {submission.selectedNetwork && (
+                                <span className="ml-2 text-xs text-gray-500">
+                                  {submission.selectedNetwork}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm font-semibold text-gray-900">
+                              ${Number(submission.amount || 0).toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-gray-500">
+                              {submission.created_at
+                                ? new Date(
+                                    submission.created_at
+                                  ).toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "—"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                submission.status === "confirmed"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
                             >
-                              ID
-                            </a>
-                          )}
-                          {s.paymentProofUrl && (
-                            <a
-                              className="text-blue-600 text-xs"
-                              href={s.paymentProofUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Proof
-                            </a>
-                          )}
-                          {s.status !== "confirmed" && (
-                            <button
-                              disabled={!!updatingIds[s.id]}
-                              onClick={() => confirmMark(s.id)}
-                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
-                            >
-                              {updatingIds[s.id]
-                                ? "Updating..."
-                                : "Mark Confirmed"}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* pagination */}
-            <div className="flex items-center justify-between mt-3">
-              <div className="text-sm text-gray-600">
-                Showing {(page - 1) * PAGE_SIZE + 1} -{" "}
-                {Math.min(page * PAGE_SIZE, filtered.length)} of{" "}
-                {filtered.length}
+                              {submission.status === "confirmed" ? (
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                              ) : (
+                                <Clock className="h-3 w-3 mr-1" />
+                              )}
+                              {submission.status || "pending"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-2">
+                              {submission.idFileUrl && (
+                                <a
+                                  href={submission.idFileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:text-blue-700 transition-colors"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </a>
+                              )}
+                              {submission.paymentProofUrl && (
+                                <a
+                                  href={submission.paymentProofUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:text-blue-700 transition-colors"
+                                >
+                                  <ImageIcon className="h-4 w-4" />
+                                </a>
+                              )}
+                              {submission.status !== "confirmed" && (
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  disabled={!!updatingIds[submission.id]}
+                                  onClick={() => confirmMark(submission.id)}
+                                  className="flex items-center px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {updatingIds[submission.id] ? (
+                                    <motion.div
+                                      animate={{ rotate: 360 }}
+                                      transition={{
+                                        duration: 1,
+                                        repeat: Infinity,
+                                        ease: "linear",
+                                      }}
+                                      className="w-3 h-3 border border-white border-t-transparent rounded-full mr-1"
+                                    />
+                                  ) : (
+                                    <Check className="h-3 w-3 mr-1" />
+                                  )}
+                                  {updatingIds[submission.id]
+                                    ? "..."
+                                    : "Confirm"}
+                                </motion.button>
+                              )}
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="px-2 py-1 bg-gray-200 rounded"
-                >
-                  Prev
-                </button>
-                <div className="px-2">{page}</div>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2 py-1 bg-gray-200 rounded"
-                >
-                  Next
-                </button>
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing{" "}
+                    <span className="font-medium">
+                      {(page - 1) * PAGE_SIZE + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-medium">
+                      {Math.min(page * PAGE_SIZE, filtered.length)}
+                    </span>{" "}
+                    of <span className="font-medium">{filtered.length}</span>{" "}
+                    results
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </motion.button>
+
+                    <div className="flex items-center space-x-1">
+                      {Array.from(
+                        { length: Math.min(5, totalPages) },
+                        (_, i) => {
+                          const pageNum =
+                            Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
+                          return (
+                            <motion.button
+                              key={pageNum}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => setPage(pageNum)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                pageNum === page
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              {pageNum}
+                            </motion.button>
+                          );
+                        }
+                      )}
+                    </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      disabled={page >= totalPages}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </motion.button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </main>
 
       <Footer />
 
-      {/* Confirm modal */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full text-center space-y-4">
-            <h3 className="text-xl font-bold">Confirm action</h3>
-            <p>Are you sure you want to mark this submission as confirmed?</p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 bg-gray-200 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={doMarkConfirmed}
-                className="px-4 py-2 bg-blue-600 text-white rounded"
-              >
-                Yes, confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Confirm Submission
+                </h3>
+              </div>
+
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to mark this submission as confirmed? This
+                action cannot be undone.
+              </p>
+
+              <div className="flex space-x-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={doMarkConfirmed}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  Confirm
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

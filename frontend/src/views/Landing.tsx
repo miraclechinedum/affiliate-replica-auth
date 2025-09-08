@@ -5,7 +5,10 @@ export default () => (
     <Header />
     <header
       className="relative bg-cover bg-center h-screen bg-[#e1ebdc]"
-      style={{ backgroundImage: "url('hero3.jpg')" }}
+      style={{
+        backgroundImage:
+          "url('https://joinrobin.affiliatepartnerpath.pro/hero3.jpg')",
+      }}
     >
       <div className="absolute inset-0 bg-white opacity-30 xmd:opacity-0"></div>
       <div className="container max-w-8xl px-4 mx-auto h-full flex items-center relative z-10">
