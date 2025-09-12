@@ -2,10 +2,10 @@
   "name": "affiliate-backend-auth",
   "version": "1.0.0",
   "private": true,
-  "main": "index.js",
+  "main": "backend/index.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js"
+    "dev": "nodemon backend/index.js",
+    "start": "node backend/index.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
